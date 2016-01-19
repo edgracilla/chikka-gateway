@@ -1,0 +1,20 @@
+{
+  "shortcode": {
+	"label": "Short Code",
+	"type": "String",
+	"required": true,
+	"help": "Your Chikka SMS Gateway Shortcode."
+  },
+  "client_id": {
+	"label": "Client ID",
+	"type": "String",
+	"required": true,
+	"help": "Your Chikka SMS Gateway Client ID."
+  },
+  "secret_key": {
+	"label": "Client Secret",
+	"type": "Password",
+	"required": true,
+	"help": "Your Chikka SMS Gateway Secret Key."
+  }
+}
