@@ -127,7 +127,7 @@ platform.once('ready', function (options, registeredDevices) {
 	app.use(hpp());
 
 	app.post('/messages', (req, res) => {
-		if (!req.body) return;
+		if (!req.body) return res.status(400).send('Error parsing data.');
 
 		var reqData = req.body.split('&');
 		var reqObj = {
@@ -205,8 +205,7 @@ platform.once('ready', function (options, registeredDevices) {
 		});
 	});
 
-	server = app.listen(options.port, () => {
-		platform.notifyReady();
-		platform.log('Gateway has been initialized on port ' + options.port);
-	});
+	server = app.listen(options.port);
+	platform.notifyReady();
+	platform.log('Chikka Gateway has been initialized on port ' + options.port);
 });
