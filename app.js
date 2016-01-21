@@ -152,13 +152,13 @@ platform.once('ready', function (options, registeredDevices) {
 			if (error) {
 				console.error(error);
 				platform.handleException(error);
-				return res.status(400).end();
+				return res.status(400).send('Error parsing data.');
 			}
 
 			if (reqObj.shortcode !== shortCode) {
 				console.error('Shortcodes should match.');
 				platform.handleException(new Error('Shortcodes should match.'));
-				return res.status(400).end();
+				return res.status(400).send('Shortcodes should match.');
 			}
 
 			if (isEmpty(authorizedDevices[reqObj.mobile_number])) {
@@ -168,14 +168,22 @@ platform.once('ready', function (options, registeredDevices) {
 					device: reqObj.mobile_number
 				}));
 
-				return res.status(401).end();
+				return res.status(401).send('Unauthorized device.');
 			}
+
+			platform.log(JSON.stringify({
+				title: 'Chikka Gateway Data',
+				mobile_number: reqObj.mobile_number,
+				shortcode: reqObj.shortcode,
+				request_id: reqObj.request_id,
+				message: reqObj.message
+			}));
 
 			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj), (processingError) => {
 				if (processingError) {
 					console.error(processingError);
 					platform.handleException(processingError);
-					return res.status(500).end();
+					return res.status(500).send('Error sending data.');
 				}
 
 				request.post({
@@ -186,11 +194,11 @@ platform.once('ready', function (options, registeredDevices) {
 					if (error) {
 						console.error(error);
 						platform.handleException(processingError);
-						return res.status(500).end();
+						return res.status(500).send('Error sending reply to Chikka.');
 					}
 					else {
 						console.log(body);
-						res.status(200).end();
+						res.status(200).send('OK');
 					}
 				});
 			});
