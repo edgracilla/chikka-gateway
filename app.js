@@ -51,10 +51,10 @@ platform.on('message', function (message) {
 platform.on('adddevice', function (device) {
 	if (!isEmpty(device) && !isEmpty(device._id)) {
 		authorizedDevices[device._id] = device;
-		platform.log('Successfully added ' + device._id + ' to the pool of authorized devices.');
+		platform.log(`Successfully added ${device._id} to the pool of authorized devices.`);
 	}
 	else
-		platform.handleException(new Error('Device data invalid. Device not added. ' + device));
+		platform.handleException(new Error(`Device data invalid. Device not added. ${device}`));
 });
 
 /**
@@ -64,10 +64,10 @@ platform.on('adddevice', function (device) {
 platform.on('removedevice', function (device) {
 	if (!isEmpty(device) && !isEmpty(device._id)) {
 		delete authorizedDevices[device._id];
-		platform.log('Successfully removed ' + device._id + ' from the pool of authorized devices.');
+		platform.log(`Successfully added ${device._id} from the pool of authorized devices.`);
 	}
 	else
-		platform.handleException(new Error('Device data invalid. Device not removed. ' + device));
+		platform.handleException(new Error(`Device data invalid. Device not removed. ${device}`));
 });
 
 /**
@@ -76,17 +76,17 @@ platform.on('removedevice', function (device) {
 platform.once('close', function () {
 	let d = domain.create();
 
-	d.once('error', function (error) {
+	d.once('error', (error) => {
 		console.error(error);
 		platform.handleException(error);
 		platform.notifyClose();
 		d.exit();
 	});
 
-	d.run(function () {
-		server.close();
-		platform.notifyClose(); // Notify the platform that resources have been released.
-		d.exit();
+	d.run(() => {
+		server.close(() => {
+			d.exit();
+		});
 	});
 });
 
@@ -97,17 +97,21 @@ platform.once('close', function () {
  * @param {array} registeredDevices Collection of device objects registered on the platform.
  */
 platform.once('ready', function (options, registeredDevices) {
-	let hpp            = require('hpp'),
-		uuid           = require('node-uuid'),
-		async          = require('async'),
-		keyBy          = require('lodash.keyby'),
-		config         = require('./config.json'),
-		express        = require('express'),
-		bodyParser     = require('body-parser'),
-		methodOverride = require('method-override');
+	let hpp        = require('hpp'),
+		uuid       = require('node-uuid'),
+		async      = require('async'),
+		keyBy      = require('lodash.keyby'),
+		config     = require('./config.json'),
+		express    = require('express'),
+		bodyParser = require('body-parser');
 
 	if (!isEmpty(registeredDevices))
 		authorizedDevices = keyBy(registeredDevices, '_id');
+
+	if (isEmpty(options.url))
+		options.url = config.url.default;
+	else
+		options.url = (options.url.startsWith('/')) ? options.url : `/${options.url}`;
 
 	shortCode = options.shortcode;
 	clientId = options.client_id;
@@ -118,24 +122,26 @@ platform.once('ready', function (options, registeredDevices) {
 	app.disable('x-powered-by');
 
 	app.use(bodyParser.text({
-		type: '*/*'
+		type: '*/*',
+		limit: '500kb'
 	}));
+
 	app.use(bodyParser.urlencoded({
 		extended: true
 	}));
-	app.use(methodOverride());
+
 	app.use(hpp());
 
-	app.post('/messages', (req, res) => {
+	app.post(options.url, (req, res) => {
 		if (!req.body) return res.status(400).send('Error parsing data.');
 
-		var reqData = req.body.split('&');
-		var reqObj = {
-			mobile_number: '',
-			shortcode: '',
-			request_id: '',
-			message: ''
-		};
+		let reqData = req.body.split('&'),
+			reqObj  = {
+				mobile_number: '',
+				shortcode: '',
+				request_id: '',
+				message: ''
+			};
 
 		async.each(reqData, (data, cb) => {
 			if (/^mobile_number=/.test(data))
@@ -163,6 +169,7 @@ platform.once('ready', function (options, registeredDevices) {
 
 			if (isEmpty(authorizedDevices[reqObj.mobile_number])) {
 				console.error('Device unauthorized.');
+
 				platform.log(JSON.stringify({
 					title: 'Unauthorized Device',
 					device: reqObj.mobile_number
@@ -181,7 +188,6 @@ platform.once('ready', function (options, registeredDevices) {
 
 			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj), (processingError) => {
 				if (processingError) {
-					console.error(processingError);
 					platform.handleException(processingError);
 					return res.status(500).send('Error sending data.');
 				}
@@ -198,14 +204,22 @@ platform.once('ready', function (options, registeredDevices) {
 					}
 					else {
 						console.log(body);
-						res.status(200).send('OK');
+						res.status(200).send('Accepted');
 					}
 				});
 			});
 		});
 	});
 
-	server = app.listen(options.port);
+	server = require('http').Server(app);
+
+	server.once('close', () => {
+		console.log(`Chikka Gateway closed on port ${options.port}`);
+		platform.notifyClose();
+	});
+
+	server.listen(options.port);
+
 	platform.notifyReady();
-	platform.log('Chikka Gateway has been initialized on port ' + options.port);
+	platform.log(`Chikka Gateway has been initialized on port ${options.port}`);
 });
