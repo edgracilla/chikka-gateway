@@ -16,5 +16,11 @@
 	"type": "Password",
 	"required": true,
 	"help": "Your Chikka SMS Gateway Secret Key."
+  },
+  "url": {
+	"label": "URL",
+	"type": "String",
+	"default": "/",
+	"help": "(Optional) The path where messages will get POSTed to. Default: /"
   }
 }
