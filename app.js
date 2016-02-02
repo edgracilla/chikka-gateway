@@ -26,7 +26,6 @@ platform.on('message', function (message) {
 			let d = domain.create();
 
 			d.once('error', (error) => {
-				console.log(error);
 				platform.handleException(error);
 				d.exit();
 			});
@@ -101,6 +100,7 @@ platform.once('ready', function (options, registeredDevices) {
 		uuid       = require('node-uuid'),
 		async      = require('async'),
 		keyBy      = require('lodash.keyby'),
+		helmet     = require('helmet'),
 		config     = require('./config.json'),
 		express    = require('express'),
 		bodyParser = require('body-parser');
@@ -119,8 +119,6 @@ platform.once('ready', function (options, registeredDevices) {
 
 	var app = express();
 
-	app.disable('x-powered-by');
-
 	app.use(bodyParser.text({
 		type: '*/*',
 		limit: '500kb'
@@ -130,10 +128,16 @@ platform.once('ready', function (options, registeredDevices) {
 		extended: true
 	}));
 
+	// For security
+	app.disable('x-powered-by');
+	app.use(helmet.xssFilter({setOnOldIE: true}));
+	app.use(helmet.frameguard('deny'));
+	app.use(helmet.ieNoOpen());
+	app.use(helmet.noSniff());
 	app.use(hpp());
 
 	app.post(options.url, (req, res) => {
-		if (!req.body) return res.status(400).send('Error parsing data.');
+		if (isEmpty(req.body)) return res.status(400).send('Error parsing data.');
 
 		let reqData = req.body.split('&'),
 			reqObj  = {
@@ -158,33 +162,30 @@ platform.once('ready', function (options, registeredDevices) {
 			if (error) {
 				console.error(error);
 				platform.handleException(error);
+
 				return res.status(400).send('Error parsing data.');
 			}
 
 			if (reqObj.shortcode !== shortCode) {
-				console.error('Shortcodes should match.');
-				platform.handleException(new Error('Shortcodes should match.'));
-				return res.status(400).send('Shortcodes should match.');
+				platform.handleException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`));
+
+				return res.status(400).send(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`);
+			}
+
+			if (isEmpty(reqObj.mobile_number)) {
+				platform.handleException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'));
+
+				return res.status(400).send('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.');
 			}
 
 			if (isEmpty(authorizedDevices[reqObj.mobile_number])) {
-				console.error('Device unauthorized.');
-
 				platform.log(JSON.stringify({
-					title: 'Unauthorized Device',
+					title: 'Chikka Gateway - Access Denied. Unauthorized Device',
 					device: reqObj.mobile_number
 				}));
 
-				return res.status(401).send('Unauthorized device.');
+				return res.status(401).send('Access Denied. Unauthorized device.');
 			}
-
-			platform.log(JSON.stringify({
-				title: 'Chikka Gateway Data',
-				mobile_number: reqObj.mobile_number,
-				shortcode: reqObj.shortcode,
-				request_id: reqObj.request_id,
-				message: reqObj.message
-			}));
 
 			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj), (processingError) => {
 				if (processingError) {
@@ -196,18 +197,25 @@ platform.once('ready', function (options, registeredDevices) {
 					url: `${SEND_URL}`,
 					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}request_id=${reqObj.request_id}&message_id=${uuid.v4()}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
 					gzip: true
-				}, (error, response, body) => {
+				}, (error) => {
 					if (error) {
 						console.error(error);
 						platform.handleException(processingError);
 						return res.status(500).send('Error sending reply to Chikka.');
 					}
 					else {
-						console.log(body);
 						res.status(200).send('Accepted');
 					}
 				});
 			});
+
+			platform.log(JSON.stringify({
+				title: 'Chikka Gateway - Data Received',
+				mobile_number: reqObj.mobile_number,
+				shortcode: reqObj.shortcode,
+				request_id: reqObj.request_id,
+				message: reqObj.message
+			}));
 		});
 	});
 

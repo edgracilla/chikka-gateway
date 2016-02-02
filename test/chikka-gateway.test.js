@@ -45,7 +45,8 @@ describe('Gateway', function () {
 						port: PORT,
 						shortcode: SHORT_CODE,
 						client_id: CLIENT_ID,
-						secret_key: SECRET_KEY
+						secret_key: SECRET_KEY,
+						url: '/messages'
 					},
 					devices: [{_id: CLIENT_ID1}, {_id: CLIENT_ID2}]
 				}
@@ -69,9 +70,9 @@ describe('Gateway', function () {
 				body: `message_type=incoming&mobile_number=${CLIENT_ID1}&shortcode=${SHORT_CODE}&request_id=5048303030534D415254303030303032393230303032303030303030303133323030303036333933393932333934303030303030313331313035303735383137&message=This+is+a+test+message&timestamp=1383609498.44`,
 				gzip: true
 			}, (error, response, body) => {
-				console.error('Error', error);
-				console.log('Status Code', response.statusCode);
-				console.log('Body', body);
+				assert.ifError(error);
+				assert.equal(response.statusCode, 200, `Response Status should be 200. Status: ${response.statusCode}`);
+				assert.equal(body, 'Accepted', `Response Body should be "Accepted". Body: ${body}`);
 				done();
 			});
 		});
