@@ -15,8 +15,11 @@ var domain            = require('domain'),
  */
 platform.on('message', function (message) {
 	request.post({
-		url: `${SEND_URL}?message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.messageId}&message=${message.message}&client_id=${clientId}&secret_key=${secretKey}`,
-		gzip: true
+		url: SEND_URL,
+		body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.messageId}&message=${message.message}&client_id=${clientId}&secret_key=${secretKey}`,
+		headers: {
+			'Content-Type': 'text/plain'
+		}
 	}, (error, response, body) => {
 		if (error)
 			return platform.sendMessageResponse(message.messageId, `Error sending message. Error: ${error.message}`);
@@ -97,9 +100,9 @@ platform.once('close', function () {
  */
 platform.once('ready', function (options, registeredDevices) {
 	let hpp        = require('hpp'),
-		uuid       = require('node-uuid'),
 		async      = require('async'),
 		keyBy      = require('lodash.keyby'),
+		chance     = new require('chance')(),
 		helmet     = require('helmet'),
 		config     = require('./config.json'),
 		express    = require('express'),
@@ -187,6 +190,8 @@ platform.once('ready', function (options, registeredDevices) {
 				return res.status(401).send('Access Denied. Unauthorized device.');
 			}
 
+			res.status(200).send('Accepted');
+
 			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj), (processingError) => {
 				if (processingError) {
 					platform.handleException(processingError);
@@ -194,17 +199,15 @@ platform.once('ready', function (options, registeredDevices) {
 				}
 
 				request.post({
-					url: `${SEND_URL}`,
-					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}request_id=${reqObj.request_id}&message_id=${uuid.v4()}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
-					gzip: true
+					url: SEND_URL,
+					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}request_id=${reqObj.request_id}&message_id=${chance.string({length: 32, pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
+					headers: {
+						'Content-Type': 'text/plain'
+					}
 				}, (error) => {
 					if (error) {
 						console.error(error);
 						platform.handleException(processingError);
-						return res.status(500).send('Error sending reply to Chikka.');
-					}
-					else {
-						res.status(200).send('Accepted');
 					}
 				});
 			});
