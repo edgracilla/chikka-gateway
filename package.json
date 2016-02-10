@@ -1,7 +1,7 @@
 {
   "name": "chikka-gateway",
   "description": "Chikka SMS Gateway Plugin for the Reekoh IoT Platform. Subscribes to a Chikka's Shortcode to receive SMS Data sent by sensors/device via Chikka's SMS Gateway/API.",
-  "version": "0.1.5",
+  "version": "0.1.7",
   "author": "Reekoh, Inc.",
   "main": "app.js",
   "scripts": {

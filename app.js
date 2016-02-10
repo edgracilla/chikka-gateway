@@ -140,6 +140,11 @@ platform.once('ready', function (options, registeredDevices) {
 	app.use(hpp());
 
 	app.post(options.url, (req, res) => {
+		platform.log(JSON.stringify({
+			title: 'Chikka Gateway - Raw Data Captured',
+			data: req.body
+		}));
+
 		if (isEmpty(req.body)) return res.status(400).send('Error parsing data.');
 
 		let reqData = req.body.split('&'),
@@ -200,7 +205,7 @@ platform.once('ready', function (options, registeredDevices) {
 
 				request.post({
 					url: SEND_URL,
-					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}request_id=${reqObj.request_id}&message_id=${chance.string({length: 32, pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
+					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({length: 32, pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
 					headers: {
 						'Content-Type': 'text/plain'
 					}
