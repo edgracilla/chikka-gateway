@@ -169,6 +169,19 @@ platform.once('ready', function (options, registeredDevices) {
 
 			cb();
 		}, (error) => {
+			request.post({
+				url: SEND_URL,
+				body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
+					length: 32,
+					pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+				})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
+				headers: {
+					'Content-Type': 'text/plain'
+				}
+			}, (error) => {
+				if (error) console.error(error);
+			});
+
 			if (error) {
 				console.error(error);
 				platform.handleException(error);
@@ -197,30 +210,9 @@ platform.once('ready', function (options, registeredDevices) {
 				return res.status(401).send('Access Denied. Unauthorized device.');
 			}
 
-			res.status(200).send('Accepted');
+			res.status(200).send('Data Received');
 
-			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj), (processingError) => {
-				if (processingError) {
-					platform.handleException(processingError);
-					return res.status(500).send('Error sending data.');
-				}
-
-				request.post({
-					url: SEND_URL,
-					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
-						length: 32,
-						pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-					})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
-					headers: {
-						'Content-Type': 'text/plain'
-					}
-				}, (error) => {
-					if (error) {
-						console.error(error);
-						platform.handleException(processingError);
-					}
-				});
-			});
+			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
 
 			platform.log(JSON.stringify({
 				title: 'Chikka Gateway - Data Received',
