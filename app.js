@@ -28,19 +28,21 @@ platform.on('message', function (message) {
 		else {
 			let d = domain.create();
 
-			d.once('error', (error) => {
+			d.once('error', function (error) {
 				platform.handleException(error);
 				d.exit();
 			});
 
-			body = JSON.parse(body);
+			d.run(function () {
+				body = JSON.parse(body);
 
-			if (body.status === 200 || body.status === '200')
-				platform.sendMessageResponse(message.messageId, 'Message Sent Successfully');
-			else
-				platform.sendMessageResponse(message.messageId, `Error sending message. Status: ${body.status}.`);
+				if (body.status === 200 || body.status === '200')
+					platform.sendMessageResponse(message.messageId, 'Message Sent Successfully');
+				else
+					platform.sendMessageResponse(message.messageId, `Error sending message. Status: ${body.status}.`);
 
-			d.exit();
+				d.exit();
+			});
 		}
 	});
 });
@@ -78,14 +80,14 @@ platform.on('removedevice', function (device) {
 platform.once('close', function () {
 	let d = domain.create();
 
-	d.once('error', (error) => {
+	d.once('error', function (error) {
 		console.error(error);
 		platform.handleException(error);
 		platform.notifyClose();
 		d.exit();
 	});
 
-	d.run(() => {
+	d.run(function () {
 		server.close(() => {
 			d.exit();
 		});
@@ -205,7 +207,10 @@ platform.once('ready', function (options, registeredDevices) {
 
 				request.post({
 					url: SEND_URL,
-					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({length: 32, pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
+					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
+						length: 32,
+						pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+					})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
 					headers: {
 						'Content-Type': 'text/plain'
 					}
