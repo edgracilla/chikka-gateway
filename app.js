@@ -15,8 +15,11 @@ var domain            = require('domain'),
  */
 platform.on('message', function (message) {
 	request.post({
-		url: `${SEND_URL}?message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.messageId}&message=${message.message}&client_id=${clientId}&secret_key=${secretKey}`,
-		gzip: true
+		url: SEND_URL,
+		body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.messageId}&message=${message.message}&client_id=${clientId}&secret_key=${secretKey}`,
+		headers: {
+			'Content-Type': 'text/plain'
+		}
 	}, (error, response, body) => {
 		if (error)
 			return platform.sendMessageResponse(message.messageId, `Error sending message. Error: ${error.message}`);
@@ -25,19 +28,21 @@ platform.on('message', function (message) {
 		else {
 			let d = domain.create();
 
-			d.once('error', (error) => {
+			d.once('error', function (error) {
 				platform.handleException(error);
 				d.exit();
 			});
 
-			body = JSON.parse(body);
+			d.run(function () {
+				body = JSON.parse(body);
 
-			if (body.status === 200 || body.status === '200')
-				platform.sendMessageResponse(message.messageId, 'Message Sent Successfully');
-			else
-				platform.sendMessageResponse(message.messageId, `Error sending message. Status: ${body.status}.`);
+				if (body.status === 200 || body.status === '200')
+					platform.sendMessageResponse(message.messageId, 'Message Sent Successfully');
+				else
+					platform.sendMessageResponse(message.messageId, `Error sending message. Status: ${body.status}.`);
 
-			d.exit();
+				d.exit();
+			});
 		}
 	});
 });
@@ -75,14 +80,14 @@ platform.on('removedevice', function (device) {
 platform.once('close', function () {
 	let d = domain.create();
 
-	d.once('error', (error) => {
+	d.once('error', function (error) {
 		console.error(error);
 		platform.handleException(error);
 		platform.notifyClose();
 		d.exit();
 	});
 
-	d.run(() => {
+	d.run(function () {
 		server.close(() => {
 			d.exit();
 		});
@@ -97,9 +102,9 @@ platform.once('close', function () {
  */
 platform.once('ready', function (options, registeredDevices) {
 	let hpp        = require('hpp'),
-		uuid       = require('node-uuid'),
 		async      = require('async'),
 		keyBy      = require('lodash.keyby'),
+		chance     = new require('chance')(),
 		helmet     = require('helmet'),
 		config     = require('./config.json'),
 		express    = require('express'),
@@ -137,6 +142,11 @@ platform.once('ready', function (options, registeredDevices) {
 	app.use(hpp());
 
 	app.post(options.url, (req, res) => {
+		platform.log(JSON.stringify({
+			title: 'Chikka Gateway - Raw Data Captured',
+			data: req.body
+		}));
+
 		if (isEmpty(req.body)) return res.status(400).send('Error parsing data.');
 
 		let reqData = req.body.split('&'),
@@ -159,6 +169,19 @@ platform.once('ready', function (options, registeredDevices) {
 
 			cb();
 		}, (error) => {
+			request.post({
+				url: SEND_URL,
+				body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
+					length: 32,
+					pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+				})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
+				headers: {
+					'Content-Type': 'text/plain'
+				}
+			}, (error) => {
+				if (error) console.error(error);
+			});
+
 			if (error) {
 				console.error(error);
 				platform.handleException(error);
@@ -187,27 +210,9 @@ platform.once('ready', function (options, registeredDevices) {
 				return res.status(401).send('Access Denied. Unauthorized device.');
 			}
 
-			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj), (processingError) => {
-				if (processingError) {
-					platform.handleException(processingError);
-					return res.status(500).send('Error sending data.');
-				}
+			res.status(200).send('Data Received');
 
-				request.post({
-					url: `${SEND_URL}`,
-					body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}request_id=${reqObj.request_id}&message_id=${uuid.v4()}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
-					gzip: true
-				}, (error) => {
-					if (error) {
-						console.error(error);
-						platform.handleException(processingError);
-						return res.status(500).send('Error sending reply to Chikka.');
-					}
-					else {
-						res.status(200).send('Accepted');
-					}
-				});
-			});
+			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
 
 			platform.log(JSON.stringify({
 				title: 'Chikka Gateway - Data Received',
