@@ -72,7 +72,7 @@ describe('Gateway', function () {
 			}, (error, response, body) => {
 				assert.ifError(error);
 				assert.equal(response.statusCode, 200, `Response Status should be 200. Status: ${response.statusCode}`);
-				assert.equal(body, 'Accepted', `Response Body should be "Accepted". Body: ${body}`);
+				assert.equal(body, 'Data Received', `Response Body should be "Accepted". Body: ${body}`);
 				done();
 			});
 		});
