@@ -74,7 +74,6 @@ platform.once('close', function () {
 platform.once('ready', function (options) {
 	let hpp        = require('hpp'),
 		async      = require('async'),
-		keyBy      = require('lodash.keyby'),
 		chance     = new require('chance')(),
 		helmet     = require('helmet'),
 		config     = require('./config.json'),
