@@ -2,11 +2,10 @@
 
 const SEND_URL = 'https://post.chikka.com/smsapi/request';
 
-var domain            = require('domain'),
-	request           = require('request'),
-	isEmpty           = require('lodash.isempty'),
-	platform          = require('./platform'),
-	authorizedDevices = {},
+var domain   = require('domain'),
+	request  = require('request'),
+	isEmpty  = require('lodash.isempty'),
+	platform = require('./platform'),
 	server, shortCode, clientId, secretKey;
 
 /**
@@ -48,33 +47,6 @@ platform.on('message', function (message) {
 });
 
 /**
- * Emitted when a new device is registered on the platform.
- * Lets the gateway know that a new registered device is added. Can be used to authorize device connections.
- * @param {object} device The details of the device registered on the platform represented as JSON Object.
- */
-platform.on('adddevice', function (device) {
-	if (!isEmpty(device) && !isEmpty(device._id)) {
-		authorizedDevices[device._id] = device;
-		platform.log(`Successfully added ${device._id} to the pool of authorized devices.`);
-	}
-	else
-		platform.handleException(new Error(`Device data invalid. Device not added. ${device}`));
-});
-
-/**
- * Emitted when a device is removed or deleted from the platform. Can be used to authorize device connections.
- * @param {object} device The details of the device removed from the platform represented as JSON Object.
- */
-platform.on('removedevice', function (device) {
-	if (!isEmpty(device) && !isEmpty(device._id)) {
-		delete authorizedDevices[device._id];
-		platform.log(`Successfully added ${device._id} from the pool of authorized devices.`);
-	}
-	else
-		platform.handleException(new Error(`Device data invalid. Device not removed. ${device}`));
-});
-
-/**
  * Emitted when the platform shuts down the plugin. The Gateway should perform cleanup of the resources on this event.
  */
 platform.once('close', function () {
@@ -98,9 +70,8 @@ platform.once('close', function () {
  * Emitted when the platform bootstraps the plugin. The plugin should listen once and execute its init process.
  * Afterwards, platform.notifyReady() should be called to notify the platform that the init process is done.
  * @param {object} options The parameters or options. Specified through config.json. Gateways will always have port as option.
- * @param {array} registeredDevices Collection of device objects registered on the platform.
  */
-platform.once('ready', function (options, registeredDevices) {
+platform.once('ready', function (options) {
 	let hpp        = require('hpp'),
 		async      = require('async'),
 		keyBy      = require('lodash.keyby'),
@@ -109,9 +80,6 @@ platform.once('ready', function (options, registeredDevices) {
 		config     = require('./config.json'),
 		express    = require('express'),
 		bodyParser = require('body-parser');
-
-	if (!isEmpty(registeredDevices))
-		authorizedDevices = keyBy(registeredDevices, '_id');
 
 	if (isEmpty(options.url))
 		options.url = config.url.default;
@@ -186,41 +154,48 @@ platform.once('ready', function (options, registeredDevices) {
 				console.error(error);
 				platform.handleException(error);
 
-				return res.status(400).send('Error parsing data.');
+				return res.status(200).send('Data Received');
 			}
 
 			if (reqObj.shortcode !== shortCode) {
 				platform.handleException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`));
 
-				return res.status(400).send(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`);
+				return res.status(200).send('Data Received');
 			}
 
 			if (isEmpty(reqObj.mobile_number)) {
 				platform.handleException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'));
 
-				return res.status(400).send('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.');
+				return res.status(200).send('Data Received');
 			}
 
-			if (isEmpty(authorizedDevices[reqObj.mobile_number])) {
-				platform.log(JSON.stringify({
-					title: 'Chikka Gateway - Access Denied. Unauthorized Device',
-					device: reqObj.mobile_number
-				}));
+			platform.requestDeviceInfo(reqObj.mobile_number, (error, requestId) => {
+				setTimeout(() => {
+					platform.removeAllListeners(requestId);
+				}, 5000);
 
-				return res.status(401).send('Access Denied. Unauthorized device.');
-			}
+				platform.once(requestId, (deviceInfo) => {
+					if (deviceInfo) {
+						platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
 
-			res.status(200).send('Data Received');
+						platform.log(JSON.stringify({
+							title: 'Chikka Gateway - Data Received',
+							mobile_number: reqObj.mobile_number,
+							shortcode: reqObj.shortcode,
+							request_id: reqObj.request_id,
+							message: reqObj.message
+						}));
+					}
+					else {
+						platform.log(JSON.stringify({
+							title: 'Chikka Gateway - Access Denied. Unauthorized Device',
+							device: reqObj.mobile_number
+						}));
+					}
+				});
+			});
 
-			platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
-
-			platform.log(JSON.stringify({
-				title: 'Chikka Gateway - Data Received',
-				mobile_number: reqObj.mobile_number,
-				shortcode: reqObj.shortcode,
-				request_id: reqObj.request_id,
-				message: reqObj.message
-			}));
+			return res.status(200).send('Data Received');
 		});
 	});
 
