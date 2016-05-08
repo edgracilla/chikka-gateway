@@ -169,11 +169,13 @@ platform.once('ready', function (options) {
 			}
 
 			platform.requestDeviceInfo(reqObj.mobile_number, (error, requestId) => {
-				setTimeout(() => {
+				let t = setTimeout(() => {
 					platform.removeAllListeners(requestId);
 				}, 5000);
 
 				platform.once(requestId, (deviceInfo) => {
+					clearTimeout(t);
+					
 					if (deviceInfo) {
 						platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
 
