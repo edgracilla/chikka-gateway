@@ -6,7 +6,7 @@ const PORT       = 8080,
 	  SECRET_KEY = '2330e364a2c2abfa4a70c1b6ba1c54b1879b820d4d965640298be8949be67998';
 
 var cp     = require('child_process'),
-	assert = require('assert'),
+	should = require('should'),
 	gateway;
 
 describe('Gateway', function () {
@@ -23,7 +23,7 @@ describe('Gateway', function () {
 
 	describe('#spawn', function () {
 		it('should spawn a child process', function () {
-			assert.ok(gateway = cp.fork(process.cwd()), 'Child process not spawned.');
+			should.ok(gateway = cp.fork(process.cwd()), 'Child process not spawned.');
 		});
 	});
 
@@ -48,7 +48,7 @@ describe('Gateway', function () {
 					}
 				}
 			}, function (error) {
-				assert.ifError(error);
+				should.ifError(error);
 			});
 		});
 	});
@@ -67,9 +67,9 @@ describe('Gateway', function () {
 				body: `message_type=incoming&mobile_number=639178888888&shortcode=${SHORT_CODE}&request_id=5048303030534D415254303030303032393230303032303030303030303133323030303036333933393932333934303030303030313331313035303735383137&message=This+is+a+test+message&timestamp=1383609498.44`,
 				gzip: true
 			}, (error, response, body) => {
-				assert.ifError(error);
-				assert.equal(response.statusCode, 200, `Response Status should be 200. Status: ${response.statusCode}`);
-				assert.equal(body, 'Data Received', `Response Body should be "Accepted". Body: ${body}`);
+				should.ifError(error);
+				should.equal(response.statusCode, 200, `Response Status should be 200. Status: ${response.statusCode}`);
+				should.equal(body, 'Data Received', `Response Body should be "Accepted". Body: ${body}`);
 				done();
 			});
 		});
