@@ -69,7 +69,7 @@ describe('Gateway', function () {
 			}, (error, response, body) => {
 				should.ifError(error);
 				should.equal(response.statusCode, 200, `Response Status should be 200. Status: ${response.statusCode}`);
-				should.equal(body, 'Data Received', `Response Body should be "Accepted". Body: ${body}`);
+				should.ok(body.startsWith('Data Received'));
 				done();
 			});
 		});
