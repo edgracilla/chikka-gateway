@@ -110,6 +110,8 @@ platform.once('ready', function (options) {
 
 		if (isEmpty(reqObj)) return res.status(400).send('Error parsing data.');
 
+		res.set('Content-Type', 'text/plain');
+
 		request.post({
 			url: SEND_URL,
 			body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
@@ -123,17 +125,13 @@ platform.once('ready', function (options) {
 			if (error) console.error(error);
 		});
 
-		if (reqObj.shortcode !== shortCode) {
-			platform.handleException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`));
+		res.status(200).send(`Data Received. Device ID: ${reqObj.mobile_number}. Data: ${JSON.stringify(reqObj)}\n`);
 
-			return res.status(200).send('Data Received');
-		}
+		if (reqObj.shortcode !== shortCode)
+			return platform.handleException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`));
 
-		if (isEmpty(reqObj.mobile_number)) {
-			platform.handleException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'));
-
-			return res.status(200).send('Data Received');
-		}
+		if (isEmpty(reqObj.mobile_number))
+			return platform.handleException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'));
 
 		platform.requestDeviceInfo(reqObj.mobile_number, (error, requestId) => {
 			platform.once(requestId, (deviceInfo) => {
@@ -142,10 +140,7 @@ platform.once('ready', function (options) {
 
 					platform.log(JSON.stringify({
 						title: 'Chikka Gateway - Data Received',
-						mobile_number: reqObj.mobile_number,
-						shortcode: reqObj.shortcode,
-						request_id: reqObj.request_id,
-						message: reqObj.message
+						data: reqObj
 					}));
 				}
 				else {
@@ -156,8 +151,16 @@ platform.once('ready', function (options) {
 				}
 			});
 		});
+	});
 
-		return res.status(200).send('Data Received');
+	app.use((error, req, res, next) => {
+		platform.handleException(error);
+
+		res.status(500).send('An unexpected error has occurred. Please contact support.\n');
+	});
+
+	app.use((req, res) => {
+		res.status(404).send(`Invalid Path. ${req.originalUrl} Not Found\n`);
 	});
 
 	server = require('http').Server(app);
