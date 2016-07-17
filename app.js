@@ -17,7 +17,7 @@ platform.on('message', function (message) {
 		url: SEND_URL,
 		body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.messageId}&message=${message.message}&client_id=${clientId}&secret_key=${secretKey}`,
 		headers: {
-			'Content-Type': 'text/plain'
+			'Content-Type': 'application/x-www-form-urlencoded'
 		}
 	}, (error, response, body) => {
 		if (error)
@@ -93,11 +93,6 @@ platform.once('ready', function (options) {
 
 	var app = express();
 
-	app.use(bodyParser.text({
-		type: '*/*',
-		limit: '500kb'
-	}));
-
 	app.use(bodyParser.urlencoded({
 		extended: true
 	}));
@@ -111,89 +106,58 @@ platform.once('ready', function (options) {
 	app.use(hpp());
 
 	app.post(options.url, (req, res) => {
-		platform.log(JSON.stringify({
-			title: 'Chikka Gateway - Raw Data Captured',
-			data: req.body
-		}));
+		let reqObj = req.body;
 
-		if (isEmpty(req.body)) return res.status(400).send('Error parsing data.');
+		if (isEmpty(reqObj)) return res.status(400).send('Error parsing data.');
 
-		let reqData = req.body.split('&'),
-			reqObj  = {
-				mobile_number: '',
-				shortcode: '',
-				request_id: '',
-				message: ''
-			};
-
-		async.each(reqData, (data, cb) => {
-			if (/^mobile_number=/.test(data))
-				reqObj.mobile_number = data.substr(data.lastIndexOf('=') + 1);
-			else if (/^shortcode=/.test(data))
-				reqObj.shortcode = data.substr(data.lastIndexOf('=') + 1);
-			else if (/^request_id=/.test(data))
-				reqObj.request_id = data.substr(data.lastIndexOf('=') + 1);
-			else if (/^message=/.test(data))
-				reqObj.message = data.substr(data.lastIndexOf('=') + 1);
-
-			cb();
+		request.post({
+			url: SEND_URL,
+			body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
+				length: 32,
+				pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+			})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded'
+			}
 		}, (error) => {
-			request.post({
-				url: SEND_URL,
-				body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
-					length: 32,
-					pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-				})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
-				headers: {
-					'Content-Type': 'text/plain'
-				}
-			}, (error) => {
-				if (error) console.error(error);
-			});
+			if (error) console.error(error);
+		});
 
-			if (error) {
-				console.error(error);
-				platform.handleException(error);
-
-				return res.status(200).send('Data Received');
-			}
-
-			if (reqObj.shortcode !== shortCode) {
-				platform.handleException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`));
-
-				return res.status(200).send('Data Received');
-			}
-
-			if (isEmpty(reqObj.mobile_number)) {
-				platform.handleException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'));
-
-				return res.status(200).send('Data Received');
-			}
-
-			platform.requestDeviceInfo(reqObj.mobile_number, (error, requestId) => {
-				platform.once(requestId, (deviceInfo) => {
-					if (deviceInfo) {
-						platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
-
-						platform.log(JSON.stringify({
-							title: 'Chikka Gateway - Data Received',
-							mobile_number: reqObj.mobile_number,
-							shortcode: reqObj.shortcode,
-							request_id: reqObj.request_id,
-							message: reqObj.message
-						}));
-					}
-					else {
-						platform.log(JSON.stringify({
-							title: 'Chikka Gateway - Access Denied. Unauthorized Device',
-							device: reqObj.mobile_number
-						}));
-					}
-				});
-			});
+		if (reqObj.shortcode !== shortCode) {
+			platform.handleException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`));
 
 			return res.status(200).send('Data Received');
+		}
+
+		if (isEmpty(reqObj.mobile_number)) {
+			platform.handleException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'));
+
+			return res.status(200).send('Data Received');
+		}
+
+		platform.requestDeviceInfo(reqObj.mobile_number, (error, requestId) => {
+			platform.once(requestId, (deviceInfo) => {
+				if (deviceInfo) {
+					platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
+
+					platform.log(JSON.stringify({
+						title: 'Chikka Gateway - Data Received',
+						mobile_number: reqObj.mobile_number,
+						shortcode: reqObj.shortcode,
+						request_id: reqObj.request_id,
+						message: reqObj.message
+					}));
+				}
+				else {
+					platform.log(JSON.stringify({
+						title: 'Chikka Gateway - Access Denied. Unauthorized Device',
+						device: reqObj.mobile_number
+					}));
+				}
+			});
 		});
+
+		return res.status(200).send('Data Received');
 	});
 
 	server = require('http').Server(app);
