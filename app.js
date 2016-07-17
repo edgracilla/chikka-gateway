@@ -61,6 +61,8 @@ platform.once('close', function () {
 
 	d.run(function () {
 		server.close(() => {
+			server.removeAllListeners();
+			platform.notifyClose();
 			d.exit();
 		});
 	});
@@ -196,13 +198,24 @@ platform.once('ready', function (options) {
 
 	server = require('http').Server(app);
 
-	server.once('close', () => {
-		console.log(`Chikka Gateway closed on port ${options.port}`);
-		platform.notifyClose();
+	server.once('error', function (error) {
+		console.error('Chikka Gateway Error', error);
+		platform.handleException(error);
+
+		setTimeout(() => {
+			server.close(() => {
+				server.removeAllListeners();
+				process.exit();
+			});
+		}, 5000);
 	});
 
-	server.listen(options.port);
+	server.once('close', () => {
+		platform.log(`Chikka Gateway closed on port ${options.port}`);
+	});
 
-	platform.notifyReady();
-	platform.log(`Chikka Gateway has been initialized on port ${options.port}`);
+	server.listen(options.port, () => {
+		platform.notifyReady();
+		platform.log(`Chikka Gateway has been initialized on port ${options.port}`);
+	});
 });
