@@ -20,7 +20,7 @@
   "url": {
 	"label": "URL",
 	"type": "String",
-	"default": "/",
-	"help": "(Optional) The path where messages will get POSTed to. Default: /"
+	"default": "/data",
+	"help": "(Optional) The path where messages will get POSTed to. Default: /data"
   }
 }

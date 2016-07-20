@@ -105,7 +105,7 @@ platform.once('ready', function (options) {
 	app.use(helmet.noSniff());
 	app.use(hpp());
 
-	app.post(options.url, (req, res) => {
+	app.post((options.url.startsWith('/')) ? options.url : `/${options.url}`, (req, res) => {
 		let reqObj = req.body;
 
 		if (isEmpty(reqObj)) return res.status(400).send('Error parsing data.');
