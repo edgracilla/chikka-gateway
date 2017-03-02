@@ -1,188 +1,183 @@
-'use strict';
+'use strict'
 
-const SEND_URL = 'https://post.chikka.com/smsapi/request';
+const reekoh = require('reekoh')
+const plugin = new reekoh.plugins.Gateway()
 
-var domain   = require('domain'),
-	request  = require('request'),
-	isEmpty  = require('lodash.isempty'),
-	platform = require('./platform'),
-	server, shortCode, clientId, secretKey;
+const domain = require('domain')
+const request = require('request')
+const isEmpty = require('lodash.isempty')
 
-/**
- * Emitted when a message or command is received from the platform.
- * @param {object} message The message metadata
- */
-platform.on('message', function (message) {
-	request.post({
-		url: SEND_URL,
-		body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.messageId}&message=${message.message}&client_id=${clientId}&secret_key=${secretKey}`,
-		headers: {
-			'Content-Type': 'application/x-www-form-urlencoded'
-		}
-	}, (error, response, body) => {
-		if (error)
-			return platform.sendMessageResponse(message.messageId, `Error sending message. Error: ${error.message}`);
-		else if (response.statusCode !== 200)
-			return platform.sendMessageResponse(message.messageId, `Error sending message. Status: ${response.statusCode}.`);
-		else {
-			let d = domain.create();
+let server = null
+let shortCode = null
+let clientId = null
+let secretKey = null
 
-			d.once('error', function (error) {
-				platform.handleException(error);
-				d.exit();
-			});
+plugin.once('ready', () => {
+  let hpp = require('hpp')
+  let async = require('async')
+  let chance = new require('chance')()
+  let helmet = require('helmet')
+  let config = require('./config.json')
+  let express = require('express')
+  let bodyParser = require('body-parser')
 
-			d.run(function () {
-				body = JSON.parse(body);
+  let app = express()
+  let options = plugin.config
 
-				if (body.status === 200 || body.status === '200')
-					platform.sendMessageResponse(message.messageId, 'Message Sent Successfully');
-				else
-					platform.sendMessageResponse(message.messageId, `Error sending message. Status: ${body.status}.`);
+  if (isEmpty(options.url))		{
+    options.url = config.url.default
+  } else		{
+    options.url = (options.url.startsWith('/')) ? options.url : `/${options.url}`
+  }
 
-				d.exit();
-			});
-		}
-	});
-});
+  shortCode = options.shortcode
+  clientId = options.client_id
+  secretKey = options.secret_key
 
-/**
- * Emitted when the platform shuts down the plugin. The Gateway should perform cleanup of the resources on this event.
- */
-platform.once('close', function () {
-	let d = domain.create();
-
-	d.once('error', function (error) {
-		console.error(error);
-		platform.handleException(error);
-		platform.notifyClose();
-		d.exit();
-	});
-
-	d.run(function () {
-		server.close(() => {
-			server.removeAllListeners();
-			platform.notifyClose();
-			d.exit();
-		});
-	});
-});
-
-/**
- * Emitted when the platform bootstraps the plugin. The plugin should listen once and execute its init process.
- * Afterwards, platform.notifyReady() should be called to notify the platform that the init process is done.
- * @param {object} options The parameters or options. Specified through config.json. Gateways will always have port as option.
- */
-platform.once('ready', function (options) {
-	let hpp        = require('hpp'),
-		async      = require('async'),
-		chance     = new require('chance')(),
-		helmet     = require('helmet'),
-		config     = require('./config.json'),
-		express    = require('express'),
-		bodyParser = require('body-parser');
-
-	if (isEmpty(options.url))
-		options.url = config.url.default;
-	else
-		options.url = (options.url.startsWith('/')) ? options.url : `/${options.url}`;
-
-	shortCode = options.shortcode;
-	clientId = options.client_id;
-	secretKey = options.secret_key;
-
-	var app = express();
-
-	app.use(bodyParser.urlencoded({
-		extended: true
-	}));
+  app.use(bodyParser.urlencoded({
+    extended: true
+  }))
 
 	// For security
-	app.disable('x-powered-by');
-	app.use(helmet.xssFilter({setOnOldIE: true}));
-	app.use(helmet.frameguard('deny'));
-	app.use(helmet.ieNoOpen());
-	app.use(helmet.noSniff());
-	app.use(hpp());
+  app.disable('x-powered-by')
+  app.use(helmet.xssFilter({setOnOldIE: true}))
+  app.use(helmet.frameguard('deny'))
+  app.use(helmet.ieNoOpen())
+  app.use(helmet.noSniff())
+  app.use(hpp())
 
-	app.post((options.url.startsWith('/')) ? options.url : `/${options.url}`, (req, res) => {
-		let reqObj = req.body;
+  app.post((options.url.startsWith('/')) ? options.url : `/${options.url}`, (req, res) => {
+    let reqObj = req.body
 
-		if (isEmpty(reqObj)) return res.status(400).send('Error parsing data.');
+    if (isEmpty(reqObj)) return res.status(400).send('Error parsing data.')
 
-		res.set('Content-Type', 'text/plain');
+    if (reqObj.topic && reqObj.topic === 'command') {
 
-		request.post({
-			url: SEND_URL,
-			body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
-				length: 32,
-				pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
-			})}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
-			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded'
-			}
-		}, (error) => {
-			if (error) console.error(error);
-		});
+      return plugin.relayCommand(reqObj.command, reqObj.mobile_number, '').then(() => {
+        res.status(200).send(`Command Received. Device ID: ${reqObj.mobile_number}. Data: ${JSON.stringify(reqObj)}\n`)
+        return plugin.log(JSON.stringify({
+          title: 'Message Sent.',
+          device: reqObj.mobile_number,
+          command: reqObj.command
+        }))
+      }).catch((err) => {
+        console.error(err)
+        plugin.logException(err)
+      })
+    }
 
-		res.status(200).send(`Data Received. Device ID: ${reqObj.mobile_number}. Data: ${JSON.stringify(reqObj)}\n`);
+    res.set('Content-Type', 'text/plain')
 
-		if (reqObj.shortcode !== shortCode)
-			return platform.handleException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`));
+    if (reqObj.shortcode !== shortCode)			{
+      return plugin.logException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`))
+    }
 
-		if (isEmpty(reqObj.mobile_number))
-			return platform.handleException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'));
+    if (isEmpty(reqObj.mobile_number))			{
+      return plugin.logException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'))
+    }
 
-		platform.requestDeviceInfo(reqObj.mobile_number, (error, requestId) => {
-			platform.once(requestId, (deviceInfo) => {
-				if (deviceInfo) {
-					platform.processData(reqObj.mobile_number, JSON.stringify(reqObj));
+    request.post({
+      url: options.sendUrl,
+      body: `message_type=REPLY&mobile_number=${reqObj.mobile_number}&shortcode=${shortCode}&request_id=${reqObj.request_id}&message_id=${chance.string({
+        length: 32,
+        pool: 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
+      })}&message=Data+Processed&request_cost=FREE&client_id=${clientId}&secret_key=${secretKey}`,
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded'
+      }
+    }, (error) => {
+      if (error) console.error(error)
 
-					platform.log(JSON.stringify({
-						title: 'Chikka Gateway - Data Received',
-						data: reqObj
-					}));
-				}
-				else {
-					platform.log(JSON.stringify({
-						title: 'Chikka Gateway - Access Denied. Unauthorized Device',
-						device: reqObj.mobile_number
-					}));
-				}
-			});
-		});
-	});
+      plugin.requestDeviceInfo(reqObj.mobile_number).then((deviceInfo) => {
+        if (isEmpty(deviceInfo)) {
+          return plugin.log(JSON.stringify({
+            title: 'Chikka Gateway - Access Denied. Unauthorized Device',
+            device: reqObj.mobile_number
+          }))
+        }
 
-	app.use((error, req, res, next) => {
-		platform.handleException(error);
+        return plugin.pipe(reqObj).then(() => {
+          res.status(200).send(`Data Received. Device ID: ${reqObj.mobile_number}. Data: ${JSON.stringify(reqObj)}\n`)
+          return plugin.log(JSON.stringify({
+            title: 'Chikka Gateway - Data Received',
+            data: reqObj
+          }))
+        })
 
-		res.status(500).send('An unexpected error has occurred. Please contact support.\n');
-	});
+      }).catch((err) => {
+        console.error(err)
+        plugin.logException(err)
+      })
+    })
+  })
 
-	app.use((req, res) => {
-		res.status(404).send(`Invalid Path. ${req.originalUrl} Not Found\n`);
-	});
+  app.use((error, req, res, next) => {
+    plugin.logException(error)
 
-	server = require('http').Server(app);
+    res.status(500).send('An unexpected error has occurred. Please contact support.\n')
+  })
 
-	server.once('error', function (error) {
-		console.error('Chikka Gateway Error', error);
-		platform.handleException(error);
+  app.use((req, res) => {
+    res.status(404).send(`Invalid Path. ${req.originalUrl} Not Found\n`)
+  })
 
-		setTimeout(() => {
-			server.close(() => {
-				server.removeAllListeners();
-				process.exit();
-			});
-		}, 5000);
-	});
+  server = require('http').Server(app)
 
-	server.once('close', () => {
-		platform.log(`Chikka Gateway closed on port ${options.port}`);
-	});
+  server.once('error', function (error) {
+    console.error('Chikka Gateway Error', error)
+    plugin.logException(error)
 
-	server.listen(options.port, () => {
-		platform.notifyReady();
-		platform.log(`Chikka Gateway has been initialized on port ${options.port}`);
-	});
-});
+    setTimeout(() => {
+      server.close(() => {
+        server.removeAllListeners()
+        process.exit()
+      })
+    }, 5000)
+  })
+
+  server.once('close', () => {
+    plugin.log(`Chikka Gateway closed on port ${options.port}`)
+  })
+
+  server.listen(options.port, () => {
+    plugin.log(`Chikka Gateway has been initialized on port ${options.port}`)
+    plugin.emit('init')
+  })
+})
+
+plugin.on('command', (message) => {
+
+	request.post({
+		url: plugin.config.sendUrl,
+		body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.commandId}&message=${message.command}&client_id=${clientId}&secret_key=${secretKey}`,
+		headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+	}, (error, response, body) => {
+
+    plugin.emit('response.ok')
+
+		if (error) {
+      return plugin.sendCommandResponse(message.commandId, `Error sending message. Error: ${error.message}`)
+    } else if (response.statusCode !== 200) {
+      return plugin.sendCommandResponse(message.commandId, `Error sending message. Status: ${response.statusCode}.`)
+    } else {
+			let d = domain.create()
+
+			d.once('error', function (error) {
+				plugin.logException(error)
+				d.exit()
+			})
+
+			d.run(function () {
+				body = JSON.parse(body)
+
+				if (body.status === 200 || body.status === '200')
+					plugin.sendCommandResponse(message.commandId, 'Message Sent Successfully')
+				else
+					plugin.sendCommandResponse(message.commandId, `Error sending message. Status: ${body.status}.`)
+				d.exit()
+			})
+		}
+	})
+})
+
+module.exports = plugin

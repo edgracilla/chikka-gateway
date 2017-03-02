@@ -1,17 +1,19 @@
 {
   "name": "chikka-gateway",
+  "version": "1.0.0",
   "description": "Chikka SMS Gateway Plugin for the Reekoh IoT Platform. Subscribes to a Chikka's Shortcode to receive SMS Data sent by sensors/device via Chikka's SMS Gateway/API.",
-  "version": "1.1.4",
   "author": "Reekoh, Inc.",
+  "license": "GPL-3.0",
   "main": "app.js",
   "scripts": {
-    "test": "gulp test"
+    "test": "gulp lint"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/Reekoh/chikka-gateway"
   },
   "dependencies": {
+    "reekoh": "^1.0.2",
     "async": "^1.5.2",
     "body-parser": "^1.15.2",
     "chance": "^1.0.3",
@@ -22,14 +24,16 @@
     "request": "^2.73.0"
   },
   "devDependencies": {
+    "amqplib": "^0.5.1",
     "gulp": "^3.9.1",
     "gulp-cli": "^1.2.1",
     "gulp-jshint": "^2.0.1",
     "gulp-json-lint": "^0.1.0",
     "gulp-mocha": "^2.2.0",
     "gulp-plumber": "^1.1.0",
+    "gulp-standard": "^8.0.4",
+    "jshint": "^2.9.4",
     "mocha": "^2.5.3",
     "should": "^9.0.2"
-  },
-  "license": "LGPL-3.0"
+  }
 }
