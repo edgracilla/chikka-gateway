@@ -146,14 +146,14 @@ plugin.once('ready', () => {
 })
 
 plugin.on('command', (message) => {
-
+  console.log(message)
 	request.post({
 		url: plugin.config.sendUrl,
 		body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.commandId}&message=${message.command}&client_id=${clientId}&secret_key=${secretKey}`,
 		headers: {'Content-Type': 'application/x-www-form-urlencoded'}
 	}, (error, response, body) => {
 
-    plugin.emit('response.ok')
+    plugin.emit('response.ok', message.device)
 
 		if (error) {
       return plugin.sendCommandResponse(message.commandId, `Error sending message. Error: ${error.message}`)
