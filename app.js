@@ -14,8 +14,9 @@ let secretKey = null
 
 plugin.once('ready', () => {
   let hpp = require('hpp')
-  let async = require('async')
-  let chance = new require('chance')()
+  // let async = require('async')
+  let Chance = require('chance')
+  let chance = new Chance()
   let helmet = require('helmet')
   let config = require('./config.json')
   let express = require('express')
@@ -24,10 +25,10 @@ plugin.once('ready', () => {
   let app = express()
   let options = plugin.config
 
-  if (isEmpty(options.url))		{
+  if (isEmpty(options.url)) {
     options.url = config.url.default
-  } else		{
-    options.url = (options.url.startsWith('/')) ? options.url : `/${options.url}`
+  } else {
+    if (!options.url.startsWith('/')) options.url = `/${options.url}`
   }
 
   shortCode = options.shortcode
@@ -38,7 +39,7 @@ plugin.once('ready', () => {
     extended: true
   }))
 
-	// For security
+  // For security
   app.disable('x-powered-by')
   app.use(helmet.xssFilter({setOnOldIE: true}))
   app.use(helmet.frameguard('deny'))
@@ -46,13 +47,20 @@ plugin.once('ready', () => {
   app.use(helmet.noSniff())
   app.use(hpp())
 
-  app.post((options.url.startsWith('/')) ? options.url : `/${options.url}`, (req, res) => {
+  let url
+
+  if (options.url.startsWith('/')) {
+    url = options.url
+  } else {
+    url = `/${options.url}`
+  }
+
+  app.post(url, (req, res) => {
     let reqObj = req.body
 
     if (isEmpty(reqObj)) return res.status(400).send('Error parsing data.')
 
     if (reqObj.topic && reqObj.topic === 'command') {
-
       return plugin.relayCommand(reqObj.command, reqObj.mobile_number, '').then(() => {
         res.status(200).send(`Command Received. Device ID: ${reqObj.mobile_number}. Data: ${JSON.stringify(reqObj)}\n`)
         return plugin.log(JSON.stringify({
@@ -68,11 +76,11 @@ plugin.once('ready', () => {
 
     res.set('Content-Type', 'text/plain')
 
-    if (reqObj.shortcode !== shortCode)			{
+    if (reqObj.shortcode !== shortCode) {
       return plugin.logException(new Error(`Message shortcode ${reqObj.shortcode} does not match the configured shortcode ${shortCode}`))
     }
 
-    if (isEmpty(reqObj.mobile_number))			{
+    if (isEmpty(reqObj.mobile_number)) {
       return plugin.logException(new Error('Invalid data sent. Data should have a "mobile_number" field which corresponds to a registered Device ID.'))
     }
 
@@ -87,7 +95,6 @@ plugin.once('ready', () => {
       }
     }, (error) => {
       if (error) console.error(error)
-
       plugin.requestDeviceInfo(reqObj.mobile_number).then((deviceInfo) => {
         if (isEmpty(deviceInfo)) {
           return plugin.log(JSON.stringify({
@@ -103,7 +110,6 @@ plugin.once('ready', () => {
             data: reqObj
           }))
         })
-
       }).catch((err) => {
         console.error(err)
         plugin.logException(err)
@@ -147,37 +153,37 @@ plugin.once('ready', () => {
 
 plugin.on('command', (message) => {
   console.log(message)
-	request.post({
-		url: plugin.config.sendUrl,
-		body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.commandId}&message=${message.command}&client_id=${clientId}&secret_key=${secretKey}`,
-		headers: {'Content-Type': 'application/x-www-form-urlencoded'}
-	}, (error, response, body) => {
-
+  request.post({
+    url: plugin.config.sendUrl,
+    body: `message_type=SEND&mobile_number=${message.device}&shortcode=${shortCode}&message_id=${message.commandId}&message=${message.command}&client_id=${clientId}&secret_key=${secretKey}`,
+    headers: {'Content-Type': 'application/x-www-form-urlencoded'}
+  }, (error, response, body) => {
     plugin.emit('response.ok', message.device)
 
-		if (error) {
+    if (error) {
       return plugin.sendCommandResponse(message.commandId, `Error sending message. Error: ${error.message}`)
     } else if (response.statusCode !== 200) {
       return plugin.sendCommandResponse(message.commandId, `Error sending message. Status: ${response.statusCode}.`)
     } else {
-			let d = domain.create()
+      let d = domain.create()
 
-			d.once('error', function (error) {
-				plugin.logException(error)
-				d.exit()
-			})
+      d.once('error', function (error) {
+        plugin.logException(error)
+        d.exit()
+      })
 
-			d.run(function () {
-				body = JSON.parse(body)
+      d.run(function () {
+        body = JSON.parse(body)
 
-				if (body.status === 200 || body.status === '200')
-					plugin.sendCommandResponse(message.commandId, 'Message Sent Successfully')
-				else
-					plugin.sendCommandResponse(message.commandId, `Error sending message. Status: ${body.status}.`)
-				d.exit()
-			})
-		}
-	})
+        if (body.status === 200 || body.status === '200') {
+          plugin.sendCommandResponse(message.commandId, 'Message Sent Successfully')
+        } else {
+          plugin.sendCommandResponse(message.commandId, `Error sending message. Status: ${body.status}.`)
+        }
+        d.exit()
+      })
+    }
+  })
 })
 
 module.exports = plugin
